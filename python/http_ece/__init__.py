@@ -1,6 +1,7 @@
 import functools
 import os
 import struct
+from typing import Final
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.backends import default_backend
@@ -10,11 +11,11 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-MAX_RECORD_SIZE = pow(2, 31) - 1
-MIN_RECORD_SIZE = 3
-KEY_LENGTH = 16
-NONCE_LENGTH = 12
-TAG_LENGTH = 16
+MAX_RECORD_SIZE: Final[int] = pow(2, 31) - 1
+MIN_RECORD_SIZE: Final[int] = 3
+KEY_LENGTH: Final[int] = 16
+NONCE_LENGTH: Final[int] = 12
+TAG_LENGTH: Final[int] = 16
 
 # Valid content types (ordered from newest, to most obsolete)
 versions = {
@@ -27,17 +28,21 @@ versions = {
 class ECEException(Exception):
     """Exception for ECE encryption functions"""
 
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         self.message = message
 
 
 def derive_key(
-    mode, version, salt, key, private_key, dh, auth_secret, keyid, keylabel="P-256"
+        mode: str,
+        version: str,
+        salt, key, private_key, dh, auth_secret,
+        keyid,
+        keylabel: str="P-256"
 ):
     """Derive the encryption key
 
     :param mode: operational mode (encrypt or decrypt)
-    :type mode: enumerate('encrypt', 'decrypt)
+    :type mode: enumerate('encrypt', 'decrypt')
     :param salt: encryption salt value
     :type salt: str
     :param key: raw key
@@ -63,8 +68,8 @@ def derive_key(
     def build_info(base, info_context):
         return b"Content-Encoding: " + base + b"\0" + info_context
 
-    def derive_dh(mode, version, private_key, dh, keylabel):
-        def length_prefix(key):
+    def derive_dh(mode: str, version, private_key, dh, keylabel: str) -> tuple[bytes, bytes]:
+        def length_prefix(key: bytes) -> bytes:
             return struct.pack("!H", len(key)) + key
 
         if isinstance(dh, ec.EllipticCurvePublicKey):
@@ -177,9 +182,9 @@ def decrypt(
     dh=None,
     auth_secret=None,
     keyid=None,
-    keylabel="P-256",
-    rs=4096,
-    version="aes128gcm",
+    keylabel: str = "P-256",
+    rs: int = 4096,
+    version: str = "aes128gcm",
 ):
     """
     Decrypt a data block
@@ -315,11 +320,11 @@ def encrypt(
     private_key=None,
     dh=None,
     auth_secret=None,
-    keyid=None,
-    keylabel="P-256",
-    rs=4096,
-    version="aes128gcm",
-):
+    keyid: str=None,
+    keylabel: str = "P-256",
+    rs: int = 4096,
+    version: str = "aes128gcm",
+) -> bytes:
     """
     Encrypt a data block
 
@@ -346,7 +351,13 @@ def encrypt(
 
     """
 
-    def encrypt_record(key, nonce, counter, buf, last):
+    def encrypt_record(
+            key: bytes,
+            nonce: bytes,
+            counter: int,
+            buf, # FIXME type
+            last: bool
+    ) -> bytes:
         encryptor = Cipher(
             algorithms.AES(key),
             modes.GCM(iv(nonce, counter)),
@@ -361,19 +372,14 @@ def encrypt(
         data += encryptor.tag
         return data
 
-    def compose_aes128gcm(salt, content, rs, keyid):
+    def compose_aes128gcm(salt: bytes, content: bytes, rs: int, keyid: str) -> bytes:
         """Compose the header and content of an aes128gcm encrypted
         message body
 
         :param salt: The sender's salt value
-        :type salt: str
         :param content: The encrypted body of the message
-        :type content: str
         :param rs: Override for the content length
-        :type rs: int
         :param keyid: The keyid to use for this message
-        :type keyid: str
-
         """
         if len(keyid) > 255:
             raise ECEException("keyid is too long")
